@@ -1,0 +1,46 @@
+name: Build UUPlugin IPK
+
+# 1. 当 push 到 main 或者你想要的分支时触发
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    # 2. 使用 Ubuntu 最新虚拟环境
+    runs-on: ubuntu-latest
+
+    steps:
+      # 3. 签出当前仓库
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # 4. 下载对应版本的 OpenWrt SDK（这里以 22.03.5 x86_64 为例）
+      - name: Download OpenWrt SDK
+        run: |
+          wget https://downloads.openwrt.org/releases/22.03.5/targets/x86/64/openwrt-sdk-22.03.5-x86-64_gcc-11.3.0_musl.Linux-x86_64.tar.xz
+          tar xf openwrt-sdk-22.03.5-*.tar.xz
+
+      # 5. 将本仓库当作本地 feed 并拷贝到 SDK 的 feeds/local
+      - name: Prepare local feed
+        run: |
+          cd openwrt-sdk-22.03.5-*
+          # 在 feeds.conf.default 中添加本地 feed
+          echo "src-link local $GITHUB_WORKSPACE" >> feeds.conf.default
+          ./scripts/feeds update local
+          ./scripts/feeds install -a
+
+      # 6. 清理并编译你的 uuplugin 包
+      - name: Build uuplugin package
+        run: |
+          cd openwrt-sdk-22.03.5-*
+          # 先 clean 再 compile
+          make package/uuplugin/{clean,compile} V=s
+
+      # 7. 上传 .ipk 为构件，方便下载
+      - name: Upload IPK artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: uuplugin-ipk
+          path: openwrt-sdk-22.03.5-*/bin/packages/*/base/uuplugin_*.ipk
